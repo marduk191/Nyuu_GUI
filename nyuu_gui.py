@@ -29,6 +29,31 @@ class NyuuDownloader:
         self.download_dir.mkdir(exist_ok=True)
         self.nyuu_executable = None
 
+    def find_7z_executable(self):
+        """Find 7z executable on the system"""
+        # Common 7-Zip installation paths on Windows
+        common_paths = [
+            r"C:\Program Files\7-Zip\7z.exe",
+            r"C:\Program Files (x86)\7-Zip\7z.exe",
+        ]
+
+        # First try the system PATH
+        try:
+            result = subprocess.run(['7z', '--help'],
+                                  capture_output=True,
+                                  timeout=2)
+            return '7z'  # Found in PATH
+        except (FileNotFoundError, subprocess.TimeoutExpired):
+            pass
+
+        # Check common installation paths (Windows)
+        if sys.platform == 'win32':
+            for path in common_paths:
+                if os.path.exists(path):
+                    return path
+
+        return None
+
     def get_latest_release_info(self):
         """Fetch latest release information from GitHub API"""
         try:
@@ -101,27 +126,33 @@ class NyuuDownloader:
 
             # If py7zr failed, try system 7z command as fallback
             if not extraction_successful:
-                try:
-                    # Try 7z command (works on Windows if 7-Zip is installed)
-                    result = subprocess.run(
-                        ['7z', 'x', str(filepath), f'-o{extract_dir}', '-y'],
-                        check=True,
-                        capture_output=True,
-                        text=True
-                    )
-                    extraction_successful = True
-                except FileNotFoundError:
+                seven_zip_path = self.find_7z_executable()
+
+                if seven_zip_path:
+                    try:
+                        # Try 7z command (works on Windows if 7-Zip is installed)
+                        result = subprocess.run(
+                            [seven_zip_path, 'x', str(filepath), f'-o{extract_dir}', '-y'],
+                            check=True,
+                            capture_output=True,
+                            text=True
+                        )
+                        extraction_successful = True
+                    except subprocess.CalledProcessError as e:
+                        raise Exception(
+                            f"7z extraction failed with both py7zr and system 7z command. "
+                            f"py7zr error: {py7zr_error}. "
+                            f"7z command error: {e.stderr}"
+                        )
+                else:
                     # 7z command not found
                     raise Exception(
-                        "7z extraction failed with py7zr (unsupported compression filter). "
-                        "Please install 7-Zip from https://www.7-zip.org/ and ensure it's in your system PATH. "
-                        f"Original error: {py7zr_error}"
-                    )
-                except subprocess.CalledProcessError as e:
-                    raise Exception(
-                        f"7z extraction failed with both py7zr and system 7z command. "
-                        f"py7zr error: {py7zr_error}. "
-                        f"7z command error: {e.stderr}"
+                        "7z extraction failed with py7zr (unsupported BCJ2 compression filter). "
+                        "Please install 7-Zip from https://www.7-zip.org/\n"
+                        "After installation, either:\n"
+                        "1. Add 7-Zip to your system PATH, OR\n"
+                        "2. Install it to the default location (C:\\Program Files\\7-Zip\\)\n\n"
+                        f"Technical details - py7zr error: {py7zr_error}"
                     )
 
         return extract_dir
