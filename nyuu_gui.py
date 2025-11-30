@@ -525,15 +525,115 @@ class NyuuGUI:
     def __init__(self, root):
         self.root = root
         self.root.title("Nyuu GUI - Usenet Binary Poster")
-        self.root.geometry("900x800")
+        self.root.geometry("1000x850")
+
+        # Set minimum window size
+        self.root.minsize(900, 700)
 
         self.downloader = NyuuDownloader()
         self.file_processor = FileProcessor()
         self.nyuu_process = None
         self.config = {}
 
+        # Setup modern theme
+        self.setup_modern_theme()
+
         self.setup_ui()
         self.load_config()
+
+    def setup_modern_theme(self):
+        """Setup modern visual theme for the application"""
+        # Use a modern ttk theme
+        style = ttk.Style()
+
+        # Try to use a modern theme (clam is clean and modern)
+        available_themes = style.theme_names()
+        if 'clam' in available_themes:
+            style.theme_use('clam')
+        elif 'alt' in available_themes:
+            style.theme_use('alt')
+
+        # Modern color scheme
+        bg_color = '#f0f0f0'  # Light gray background
+        fg_color = '#2c3e50'  # Dark blue-gray text
+        accent_color = '#3498db'  # Modern blue
+        success_color = '#27ae60'  # Green
+        warning_color = '#e67e22'  # Orange
+        error_color = '#e74c3c'  # Red
+
+        # Configure root window
+        self.root.configure(bg=bg_color)
+
+        # Configure styles for various widgets
+        style.configure('TFrame', background=bg_color)
+        style.configure('TLabel', background=bg_color, foreground=fg_color, font=('Segoe UI', 9))
+        style.configure('TLabelframe', background=bg_color, foreground=fg_color, borderwidth=1)
+        style.configure('TLabelframe.Label', background=bg_color, foreground=fg_color, font=('Segoe UI', 9, 'bold'))
+
+        # Notebook (tabs) styling
+        style.configure('TNotebook', background=bg_color, borderwidth=0)
+        style.configure('TNotebook.Tab',
+                       background='#e0e0e0',
+                       foreground=fg_color,
+                       padding=[20, 8],
+                       font=('Segoe UI', 9))
+        style.map('TNotebook.Tab',
+                 background=[('selected', accent_color)],
+                 foreground=[('selected', 'white')],
+                 expand=[('selected', [1, 1, 1, 0])])
+
+        # Button styling
+        style.configure('TButton',
+                       background=accent_color,
+                       foreground='white',
+                       borderwidth=0,
+                       padding=[10, 5],
+                       font=('Segoe UI', 9))
+        style.map('TButton',
+                 background=[('active', '#2980b9'), ('pressed', '#2471a3')],
+                 relief=[('pressed', 'flat')])
+
+        # Success button style
+        style.configure('Success.TButton',
+                       background=success_color,
+                       foreground='white',
+                       padding=[15, 8],
+                       font=('Segoe UI', 10, 'bold'))
+        style.map('Success.TButton',
+                 background=[('active', '#229954'), ('pressed', '#1e8449')])
+
+        # Entry and Combobox styling
+        style.configure('TEntry',
+                       fieldbackground='white',
+                       foreground=fg_color,
+                       borderwidth=1,
+                       relief='solid')
+        style.configure('TCombobox',
+                       fieldbackground='white',
+                       foreground=fg_color,
+                       arrowcolor=accent_color)
+
+        # Checkbutton styling
+        style.configure('TCheckbutton',
+                       background=bg_color,
+                       foreground=fg_color,
+                       font=('Segoe UI', 9))
+
+        # Spinbox styling
+        style.configure('TSpinbox',
+                       fieldbackground='white',
+                       foreground=fg_color,
+                       arrowcolor=accent_color)
+
+        # Store colors for later use
+        self.colors = {
+            'bg': bg_color,
+            'fg': fg_color,
+            'accent': accent_color,
+            'success': success_color,
+            'warning': warning_color,
+            'error': error_color
+        }
 
     def setup_ui(self):
         """Setup the user interface"""
@@ -606,7 +706,15 @@ Features:
 
 This GUI provides an easy interface to all Nyuu features."""
 
-        info_label = tk.Label(info_frame, text=info_text, justify=tk.LEFT, anchor=tk.W)
+        info_label = tk.Label(
+            info_frame,
+            text=info_text,
+            justify=tk.LEFT,
+            anchor=tk.W,
+            bg=self.colors['bg'],
+            fg=self.colors['fg'],
+            font=('Segoe UI', 9)
+        )
         info_label.pack(fill=tk.BOTH, expand=True)
 
     def setup_server_tab(self):
@@ -887,7 +995,15 @@ Workflow:
 3. Files will be processed before upload when you click "Start Upload"
 """
 
-        info_label = tk.Label(info_frame, text=info_text, justify=tk.LEFT, anchor=tk.NW)
+        info_label = tk.Label(
+            info_frame,
+            text=info_text,
+            justify=tk.LEFT,
+            anchor=tk.NW,
+            bg=self.colors['bg'],
+            fg=self.colors['fg'],
+            font=('Segoe UI', 9)
+        )
         info_label.pack(fill=tk.BOTH, expand=True)
 
     def setup_advanced_tab(self):
@@ -934,9 +1050,19 @@ Workflow:
         frame = ttk.Frame(self.notebook)
         self.notebook.add(frame, text="Console")
 
-        # Console output
-        self.console_text = scrolledtext.ScrolledText(frame, wrap=tk.WORD, height=30)
-        self.console_text.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
+        # Console output with modern styling
+        self.console_text = scrolledtext.ScrolledText(
+            frame,
+            wrap=tk.WORD,
+            height=30,
+            bg='#1e1e1e',  # Dark background
+            fg='#d4d4d4',  # Light gray text
+            font=('Consolas', 9),
+            insertbackground='white',  # Cursor color
+            relief='flat',
+            borderwidth=5
+        )
+        self.console_text.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
 
         # Clear button
         ttk.Button(frame, text="Clear Console", command=self.clear_console).pack(pady=5)
@@ -957,8 +1083,15 @@ Workflow:
         ttk.Button(control_frame, text="View Command",
                   command=self.view_command).pack(side=tk.LEFT, padx=5)
 
-        # Status
-        self.status_label = ttk.Label(control_frame, text="Ready", foreground="green")
+        # Status label with modern styling
+        self.status_label = tk.Label(
+            control_frame,
+            text="Ready",
+            bg=self.colors['bg'],
+            fg=self.colors['success'],
+            font=('Segoe UI', 10, 'bold'),
+            padx=10
+        )
         self.status_label.pack(side=tk.RIGHT, padx=5)
 
     # Event handlers
@@ -988,12 +1121,12 @@ Workflow:
 
                 self.root.after(0, lambda: self.nyuu_path_var.set(str(exe_path)))
                 self.root.after(0, lambda: self.download_status.config(
-                    text=f"✓ Nyuu ready at: {exe_path}", foreground="green"))
+                    text=f"✓ Nyuu ready at: {exe_path}", foreground=self.colors['success']))
                 self.log_message(f"Successfully downloaded and extracted Nyuu to: {exe_path}")
 
             except Exception as e:
                 self.root.after(0, lambda: self.download_status.config(
-                    text=f"✗ Error: {str(e)}", foreground="red"))
+                    text=f"✗ Error: {str(e)}", foreground=self.colors['error']))
                 self.log_message(f"Error downloading Nyuu: {str(e)}")
             finally:
                 self.root.after(0, lambda: self.download_btn.config(state=tk.NORMAL))
@@ -1009,7 +1142,7 @@ Workflow:
         )
         if filename:
             self.nyuu_path_var.set(filename)
-            self.download_status.config(text=f"✓ Using: {filename}", foreground="green")
+            self.download_status.config(text=f"✓ Using: {filename}", foreground=self.colors['success'])
 
     def browse_nzb_output(self):
         """Browse for NZB output file"""
@@ -1071,10 +1204,10 @@ Workflow:
         """Check if PAR2 is installed"""
         par2_cmd = self.file_processor.find_par2_executable()
         if par2_cmd:
-            self.par2_status.config(text=f"✓ PAR2 found: {par2_cmd}", foreground="green")
+            self.par2_status.config(text=f"✓ PAR2 found: {par2_cmd}", foreground=self.colors['success'])
             self.log_message(f"PAR2 found: {par2_cmd}")
         else:
-            self.par2_status.config(text="✗ PAR2 not found", foreground="red")
+            self.par2_status.config(text="✗ PAR2 not found", foreground=self.colors['error'])
             messagebox.showwarning("PAR2 Not Found",
                 "PAR2 command-line tool not found.\n\n"
                 "Please install par2cmdline:\n"
@@ -1259,7 +1392,7 @@ Workflow:
             if self.enable_split_var.get() or self.enable_par2_var.get():
                 self.log_message("="*80)
                 self.log_message("Pre-processing files...")
-                self.status_label.config(text="Processing files...", foreground="blue")
+                self.status_label.config(text="Processing files...", fg=self.colors['accent'])
 
                 try:
                     processed_files = self.process_files_before_upload()
@@ -1309,17 +1442,17 @@ Workflow:
                     if self.nyuu_process.returncode == 0:
                         self.root.after(0, lambda: self.log_message("\n✓ Upload completed successfully!"))
                         self.root.after(0, lambda: self.status_label.config(
-                            text="Upload Complete", foreground="green"))
+                            text="Upload Complete", fg=self.colors['success']))
                     else:
                         self.root.after(0, lambda: self.log_message(
                             f"\n✗ Upload failed with exit code {self.nyuu_process.returncode}"))
                         self.root.after(0, lambda: self.status_label.config(
-                            text="Upload Failed", foreground="red"))
+                            text="Upload Failed", fg=self.colors['error']))
 
                 except Exception as e:
                     self.root.after(0, lambda: self.log_message(f"\n✗ Error: {str(e)}"))
                     self.root.after(0, lambda: self.status_label.config(
-                        text="Error", foreground="red"))
+                        text="Error", fg=self.colors['error']))
                 finally:
                     self.root.after(0, lambda: self.start_btn.config(state=tk.NORMAL))
                     self.root.after(0, lambda: self.stop_btn.config(state=tk.DISABLED))
@@ -1327,7 +1460,7 @@ Workflow:
 
             self.start_btn.config(state=tk.DISABLED)
             self.stop_btn.config(state=tk.NORMAL)
-            self.status_label.config(text="Uploading...", foreground="blue")
+            self.status_label.config(text="Uploading...", fg=self.colors['accent'])
 
             thread = threading.Thread(target=run_process, daemon=True)
             thread.start()
@@ -1340,7 +1473,7 @@ Workflow:
         if self.nyuu_process:
             self.nyuu_process.terminate()
             self.log_message("\n⚠ Upload stopped by user")
-            self.status_label.config(text="Stopped", foreground="orange")
+            self.status_label.config(text="Stopped", fg=self.colors['warning'])
             self.start_btn.config(state=tk.NORMAL)
             self.stop_btn.config(state=tk.DISABLED)
 
