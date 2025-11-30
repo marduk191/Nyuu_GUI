@@ -28,16 +28,54 @@ class NyuuDownloader:
         self.download_dir = Path(download_dir)
         self.download_dir.mkdir(exist_ok=True)
         self.nyuu_executable = None
+        self.seven_zip_url = "https://www.7-zip.org/a/7zr.exe"
+        self.local_7z_path = self.download_dir / "7zr.exe"
+
+    def download_7zip_standalone(self, progress_callback=None):
+        """Download standalone 7-Zip console binary for Windows"""
+        try:
+            if progress_callback:
+                progress_callback("downloading", "Downloading 7-Zip standalone binary...")
+
+            response = requests.get(self.seven_zip_url, stream=True, timeout=30)
+            response.raise_for_status()
+
+            total_size = int(response.headers.get('content-length', 0))
+            downloaded = 0
+
+            with open(self.local_7z_path, 'wb') as f:
+                for chunk in response.iter_content(chunk_size=8192):
+                    if chunk:
+                        f.write(chunk)
+                        downloaded += len(chunk)
+                        if progress_callback and total_size:
+                            percent = (downloaded / total_size) * 100
+                            progress_callback("downloading", f"Downloading 7-Zip: {percent:.1f}%")
+
+            if progress_callback:
+                progress_callback("complete", "7-Zip downloaded successfully!")
+
+            return self.local_7z_path
+
+        except Exception as e:
+            # Clean up partial download
+            if self.local_7z_path.exists():
+                self.local_7z_path.unlink()
+            raise Exception(f"Failed to download 7-Zip: {str(e)}")
 
     def find_7z_executable(self):
         """Find 7z executable on the system"""
+        # First check if we have a local copy
+        if self.local_7z_path.exists():
+            return str(self.local_7z_path)
+
         # Common 7-Zip installation paths on Windows
         common_paths = [
             r"C:\Program Files\7-Zip\7z.exe",
             r"C:\Program Files (x86)\7-Zip\7z.exe",
         ]
 
-        # First try the system PATH
+        # Try the system PATH
         try:
             result = subprocess.run(['7z', '--help'],
                                   capture_output=True,
@@ -103,7 +141,7 @@ class NyuuDownloader:
 
         return filepath
 
-    def extract_archive(self, filepath):
+    def extract_archive(self, filepath, progress_callback=None):
         """Extract downloaded archive"""
         extract_dir = self.download_dir / filepath.stem
         extract_dir.mkdir(exist_ok=True)
@@ -128,6 +166,24 @@ class NyuuDownloader:
             if not extraction_successful:
                 seven_zip_path = self.find_7z_executable()
 
+                # If no 7z found, try downloading it automatically (Windows only)
+                if not seven_zip_path and sys.platform == 'win32':
+                    try:
+                        if progress_callback:
+                            progress_callback("downloading", "7-Zip not found. Downloading standalone version...")
+
+                        self.download_7zip_standalone(progress_callback)
+                        seven_zip_path = self.find_7z_executable()
+
+                        if progress_callback:
+                            progress_callback("extracting", "7-Zip downloaded. Extracting archive...")
+                    except Exception as download_error:
+                        raise Exception(
+                            f"Failed to download 7-Zip automatically: {download_error}\n"
+                            "Please manually install 7-Zip from https://www.7-zip.org/\n\n"
+                            f"Original extraction error: {py7zr_error}"
+                        )
+
                 if seven_zip_path:
                     try:
                         # Try 7z command (works on Windows if 7-Zip is installed)
@@ -145,13 +201,11 @@ class NyuuDownloader:
                             f"7z command error: {e.stderr}"
                         )
                 else:
-                    # 7z command not found
+                    # 7z command still not found after download attempt
                     raise Exception(
                         "7z extraction failed with py7zr (unsupported BCJ2 compression filter). "
-                        "Please install 7-Zip from https://www.7-zip.org/\n"
-                        "After installation, either:\n"
-                        "1. Add 7-Zip to your system PATH, OR\n"
-                        "2. Install it to the default location (C:\\Program Files\\7-Zip\\)\n\n"
+                        "Could not find or download 7-Zip.\n"
+                        "Please manually install 7-Zip from https://www.7-zip.org/\n\n"
                         f"Technical details - py7zr error: {py7zr_error}"
                     )
 
@@ -195,7 +249,7 @@ class NyuuDownloader:
         if progress_callback:
             progress_callback("extracting", "Extracting archive...")
 
-        extract_dir = self.extract_archive(filepath)
+        extract_dir = self.extract_archive(filepath, progress_callback)
 
         # Find executable
         if progress_callback:
