@@ -204,11 +204,15 @@ The GUI is compatible with Nyuu v0.4.2 and later. It automatically downloads the
 - Try again later (GitHub may be temporarily unavailable)
 - Manually download from [Nyuu releases](https://github.com/animetosho/Nyuu/releases) and use "Browse" to select it
 
-### 7z Extraction Failed (Windows)
+### Extraction Failed
 
-**Problem**: Cannot extract .7z files
+**Problem**: Archive extraction fails
 
-**Solution**: Install [7-Zip](https://www.7-zip.org/) and ensure it's in your system PATH
+**Solutions**:
+- Ensure you have installed all dependencies: `pip install -r requirements.txt`
+- The py7zr library handles .7z files automatically (no system 7-zip needed)
+- For .tar.xz files, Python's built-in tarfile module is used
+- Check that you have write permissions in the application directory
 
 ### Upload Fails Immediately
 
@@ -245,6 +249,7 @@ The executable will be in the `dist/` directory.
 ## Dependencies
 
 - **requests**: For downloading Nyuu binaries from GitHub
+- **py7zr**: For extracting .7z archives (Windows builds)
 - **tkinter**: GUI framework (included with Python)
 
 ## Contributing
