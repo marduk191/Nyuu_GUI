@@ -1083,6 +1083,9 @@ Workflow:
         ttk.Button(control_frame, text="View Command",
                   command=self.view_command).pack(side=tk.LEFT, padx=5)
 
+        ttk.Button(control_frame, text="Prepare Files Only",
+                  command=self.prepare_files_only).pack(side=tk.LEFT, padx=5)
+
         # Status label with modern styling
         self.status_label = tk.Label(
             control_frame,
@@ -1327,6 +1330,74 @@ Workflow:
             messagebox.showinfo("Command", f"Command to execute:\n\n{command_str}")
         except ValueError as e:
             messagebox.showerror("Error", str(e))
+
+    def prepare_files_only(self):
+        """Prepare files (split and PAR2) without uploading"""
+        # Validate that files are selected
+        files = list(self.files_listbox.get(0, tk.END))
+        if not files:
+            messagebox.showerror("Error", "No files selected. Please add files in the Files tab.")
+            return
+
+        # Validate that at least one preparation option is enabled
+        if not self.enable_split_var.get() and not self.enable_par2_var.get():
+            messagebox.showerror("Error",
+                "No file preparation options enabled.\n\n"
+                "Please enable File Splitting or PAR2 Recovery in the File Preparation tab.")
+            return
+
+        # Switch to console tab to show progress
+        self.notebook.select(self.notebook.tabs()[-1])  # Select Console tab
+
+        def prepare_thread():
+            try:
+                self.root.after(0, lambda: self.status_label.config(
+                    text="Preparing files...", fg=self.colors['accent']))
+                self.root.after(0, lambda: self.start_btn.config(state=tk.DISABLED))
+
+                self.log_message("="*80)
+                self.log_message("FILE PREPARATION MODE")
+                self.log_message("Files will be prepared but NOT uploaded to Usenet")
+                self.log_message("="*80)
+
+                processed_files = self.process_files_before_upload()
+
+                # Determine output directory
+                if self.enable_split_var.get() and self.split_output_var.get():
+                    output_dir = self.split_output_var.get()
+                else:
+                    output_dir = str(self.file_processor.work_dir)
+
+                self.log_message("="*80)
+                self.log_message("✓ File preparation completed successfully!")
+                self.log_message(f"✓ Output directory: {output_dir}")
+                self.log_message(f"✓ Total files prepared: {len(processed_files)}")
+                self.log_message("="*80)
+                self.log_message("\nPrepared files:")
+                for f in processed_files:
+                    self.log_message(f"  • {f}")
+                self.log_message("\n" + "="*80)
+
+                self.root.after(0, lambda: self.status_label.config(
+                    text="Files Prepared", fg=self.colors['success']))
+                self.root.after(0, lambda: messagebox.showinfo(
+                    "Success",
+                    f"Files prepared successfully!\n\n"
+                    f"Output directory: {output_dir}\n"
+                    f"Total files: {len(processed_files)}\n\n"
+                    f"Check the Console tab for details."))
+
+            except Exception as e:
+                self.root.after(0, lambda: self.log_message(f"\n✗ Error: {str(e)}"))
+                self.root.after(0, lambda: self.status_label.config(
+                    text="Preparation Failed", fg=self.colors['error']))
+                self.root.after(0, lambda: messagebox.showerror("Error",
+                    f"File preparation failed:\n\n{str(e)}"))
+            finally:
+                self.root.after(0, lambda: self.start_btn.config(state=tk.NORMAL))
+
+        thread = threading.Thread(target=prepare_thread, daemon=True)
+        thread.start()
 
     def process_files_before_upload(self):
         """Process files (split and create PAR2) before upload"""
