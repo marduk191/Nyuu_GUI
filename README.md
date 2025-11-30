@@ -10,7 +10,8 @@ A full-featured graphical user interface for [Nyuu](https://github.com/animetosh
 ### 🚀 Automatic Nyuu Management
 - **One-click download** of Nyuu binaries from GitHub releases
 - **Multi-platform support**: Linux (x64, ARM64), macOS, Windows
-- **Automatic extraction** and setup
+- **Automatic extraction** and setup (downloads 7-Zip automatically on Windows if needed)
+- **Zero manual configuration** - works out of the box
 - **Or use your own** existing Nyuu installation
 
 ### 📡 Server Configuration
@@ -51,7 +52,7 @@ A full-featured graphical user interface for [Nyuu](https://github.com/animetosh
 
 - Python 3.6 or higher
 - pip (Python package installer)
-- **Windows users only**: [7-Zip](https://www.7-zip.org/) (required for extracting Nyuu Windows builds due to BCJ2 compression)
+- **Windows users**: 7-Zip will be downloaded automatically if needed (or you can install it manually from [7-Zip](https://www.7-zip.org/))
 
 ### Setup
 
@@ -211,7 +212,8 @@ The GUI is compatible with Nyuu v0.4.2 and later. It automatically downloads the
 
 **Solutions**:
 - Ensure you have installed all dependencies: `pip install -r requirements.txt`
-- **For Windows users**: The Windows Nyuu build uses BCJ2 compression which py7zr doesn't support. Install [7-Zip](https://www.7-zip.org/) and the application will automatically use it as a fallback
+- **For Windows users**: The application automatically downloads a standalone 7-Zip binary if needed (no manual installation required!)
+- If automatic download fails, manually install [7-Zip](https://www.7-zip.org/)
 - For Linux/macOS .tar.xz files, Python's built-in tarfile module is used (no additional tools needed)
 - Check that you have write permissions in the application directory
 - Verify the downloaded file isn't corrupted by re-downloading
