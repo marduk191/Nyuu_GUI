@@ -37,6 +37,11 @@ env/
 # Nyuu binaries
 nyuu_binaries/
 
+# Processed files (split files, PAR2 files)
+processed_files/
+*.par2
+*.vol*.par2
+
 # Configuration files with potential sensitive data
 nyuu_gui_config.json
 
