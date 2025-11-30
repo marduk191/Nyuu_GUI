@@ -16,6 +16,7 @@ import tarfile
 import zipfile
 from pathlib import Path
 import shutil
+import py7zr
 
 
 class NyuuDownloader:
@@ -86,13 +87,12 @@ class NyuuDownloader:
             with tarfile.open(filepath, 'r:xz') as tar:
                 tar.extractall(extract_dir)
         elif filepath.suffix == '.7z':
-            # For 7z files, we'll need to use system command or py7zr library
-            # For simplicity, we'll attempt system command
+            # Use py7zr library for 7z extraction
             try:
-                subprocess.run(['7z', 'x', str(filepath), f'-o{extract_dir}'],
-                             check=True, capture_output=True)
-            except (subprocess.CalledProcessError, FileNotFoundError):
-                raise Exception("7z extraction failed. Please install 7-zip.")
+                with py7zr.SevenZipFile(filepath, mode='r') as archive:
+                    archive.extractall(path=extract_dir)
+            except Exception as e:
+                raise Exception(f"7z extraction failed: {str(e)}")
 
         return extract_dir
 
