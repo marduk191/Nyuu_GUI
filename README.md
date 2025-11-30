@@ -10,7 +10,7 @@ A full-featured graphical user interface for [Nyuu](https://github.com/animetosh
 ### 🚀 Automatic Nyuu Management
 - **One-click download** of Nyuu binaries from GitHub releases
 - **Multi-platform support**: Linux (x64, ARM64), macOS, Windows
-- **Automatic extraction** and setup (downloads 7-Zip automatically on Windows if needed)
+- **Automatic tool downloads** on Windows: 7-Zip and par2cmdline downloaded automatically when needed
 - **Zero manual configuration** - works out of the box
 - **Or use your own** existing Nyuu installation
 
@@ -40,7 +40,7 @@ A full-featured graphical user interface for [Nyuu](https://github.com/animetosh
 
 ### 🔧 File Preparation
 - **File Splitting**: Automatically split large files into smaller chunks
-- **PAR2 Recovery**: Create parity files for data recovery
+- **PAR2 Recovery**: Create parity files for data recovery (auto-downloads par2cmdline on Windows!)
 - Configurable split size and redundancy percentage
 - Automatic processing before upload
 
@@ -58,11 +58,10 @@ A full-featured graphical user interface for [Nyuu](https://github.com/animetosh
 
 - Python 3.6 or higher
 - pip (Python package installer)
-- **Windows users**: 7-Zip will be downloaded automatically if needed (or you can install it manually from [7-Zip](https://www.7-zip.org/))
-- **Optional**: [par2cmdline](https://github.com/Parchive/par2cmdline) for PAR2 recovery file creation
+- **Windows users**: Both 7-Zip and par2cmdline will be downloaded automatically if needed!
+- **Linux/macOS users** (optional for PAR2):
   - Linux: `sudo apt-get install par2` or `sudo yum install par2cmdline`
   - macOS: `brew install par2`
-  - Windows: Download from [releases](https://github.com/Parchive/par2cmdline/releases)
 
 ### Setup
 
@@ -326,7 +325,8 @@ This tool is for legitimate Usenet usage only. Users are responsible for ensurin
 
 - [x] File splitting
 - [x] PAR2 recovery file creation
-- [ ] Automatic PAR2 download (similar to 7-Zip)
+- [x] Automatic PAR2 download (similar to 7-Zip)
+- [x] Automatic 7-Zip download for Windows
 - [ ] Drag-and-drop file support
 - [ ] Upload queue management
 - [ ] Upload presets/profiles

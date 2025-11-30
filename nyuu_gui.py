@@ -269,6 +269,9 @@ class FileProcessor:
     def __init__(self, work_dir="processed_files"):
         self.work_dir = Path(work_dir)
         self.work_dir.mkdir(exist_ok=True)
+        self.par2_url = "https://github.com/Parchive/par2cmdline/releases/download/v1.0.0/par2cmdline-1.0.0-win-x64.zip"
+        self.local_par2_dir = self.work_dir / "par2cmdline"
+        self.local_par2_path = self.local_par2_dir / "par2.exe"
 
     def split_file(self, filepath, chunk_size_mb, output_dir=None, progress_callback=None):
         """Split a file into chunks of specified size"""
@@ -321,8 +324,71 @@ class FileProcessor:
         except Exception as e:
             raise Exception(f"Failed to split file: {str(e)}")
 
+    def download_par2_standalone(self, progress_callback=None):
+        """Download standalone par2cmdline binary for Windows"""
+        try:
+            if progress_callback:
+                progress_callback("downloading", "Downloading par2cmdline standalone binary...")
+
+            response = requests.get(self.par2_url, stream=True, timeout=30)
+            response.raise_for_status()
+
+            total_size = int(response.headers.get('content-length', 0))
+            downloaded = 0
+
+            # Download to temp file
+            zip_path = self.work_dir / "par2cmdline.zip"
+
+            with open(zip_path, 'wb') as f:
+                for chunk in response.iter_content(chunk_size=8192):
+                    if chunk:
+                        f.write(chunk)
+                        downloaded += len(chunk)
+                        if progress_callback and total_size:
+                            percent = (downloaded / total_size) * 100
+                            progress_callback("downloading", f"Downloading par2cmdline: {percent:.1f}%")
+
+            # Extract ZIP file
+            if progress_callback:
+                progress_callback("extracting", "Extracting par2cmdline...")
+
+            self.local_par2_dir.mkdir(exist_ok=True)
+
+            with zipfile.ZipFile(zip_path, 'r') as zip_ref:
+                zip_ref.extractall(self.local_par2_dir)
+
+            # Clean up zip file
+            zip_path.unlink()
+
+            # Find par2.exe in extracted files
+            for root, dirs, files in os.walk(self.local_par2_dir):
+                for file in files:
+                    if file.lower() == 'par2.exe':
+                        exe_path = Path(root) / file
+                        # Move to expected location if in subdirectory
+                        if exe_path != self.local_par2_path:
+                            shutil.move(str(exe_path), str(self.local_par2_path))
+                        break
+
+            if progress_callback:
+                progress_callback("complete", "par2cmdline downloaded successfully!")
+
+            return self.local_par2_path
+
+        except Exception as e:
+            # Clean up on failure
+            if zip_path.exists():
+                zip_path.unlink()
+            if self.local_par2_dir.exists():
+                shutil.rmtree(self.local_par2_dir)
+            raise Exception(f"Failed to download par2cmdline: {str(e)}")
+
     def find_par2_executable(self):
         """Find par2 executable on the system"""
+        # First check if we have a local copy
+        if self.local_par2_path.exists():
+            return str(self.local_par2_path)
+
         # Check if par2 or par2create is in PATH
         for cmd in ['par2', 'par2create', 'par2.exe']:
             try:
@@ -365,13 +431,31 @@ class FileProcessor:
         # Find par2 executable
         par2_cmd = self.find_par2_executable()
 
+        # If no par2 found, try downloading it automatically (Windows only)
+        if not par2_cmd and sys.platform == 'win32':
+            try:
+                if progress_callback:
+                    progress_callback("downloading", "par2cmdline not found. Downloading standalone version...")
+
+                self.download_par2_standalone(progress_callback)
+                par2_cmd = self.find_par2_executable()
+
+                if progress_callback:
+                    progress_callback("creating", "par2cmdline downloaded. Creating PAR2 files...")
+            except Exception as download_error:
+                raise Exception(
+                    f"Failed to download par2cmdline automatically: {download_error}\n\n"
+                    "Please manually install par2cmdline from:\n"
+                    "https://github.com/Parchive/par2cmdline/releases"
+                )
+
         if not par2_cmd:
             raise Exception(
                 "PAR2 command-line tool not found.\n\n"
                 "Please install par2cmdline:\n"
-                "- Windows: Download from https://github.com/Parchive/par2cmdline/releases\n"
                 "- Linux: sudo apt-get install par2 (or yum install par2cmdline)\n"
-                "- macOS: brew install par2"
+                "- macOS: brew install par2\n"
+                "- Windows: Download from https://github.com/Parchive/par2cmdline/releases"
             )
 
         # Determine output directory
