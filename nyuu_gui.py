@@ -87,12 +87,42 @@ class NyuuDownloader:
             with tarfile.open(filepath, 'r:xz') as tar:
                 tar.extractall(extract_dir)
         elif filepath.suffix == '.7z':
-            # Use py7zr library for 7z extraction
+            # First try py7zr library for 7z extraction
+            extraction_successful = False
+            py7zr_error = None
+
             try:
                 with py7zr.SevenZipFile(filepath, mode='r') as archive:
                     archive.extractall(path=extract_dir)
+                extraction_successful = True
             except Exception as e:
-                raise Exception(f"7z extraction failed: {str(e)}")
+                py7zr_error = str(e)
+                # py7zr failed, likely due to unsupported compression filter (BCJ2)
+
+            # If py7zr failed, try system 7z command as fallback
+            if not extraction_successful:
+                try:
+                    # Try 7z command (works on Windows if 7-Zip is installed)
+                    result = subprocess.run(
+                        ['7z', 'x', str(filepath), f'-o{extract_dir}', '-y'],
+                        check=True,
+                        capture_output=True,
+                        text=True
+                    )
+                    extraction_successful = True
+                except FileNotFoundError:
+                    # 7z command not found
+                    raise Exception(
+                        "7z extraction failed with py7zr (unsupported compression filter). "
+                        "Please install 7-Zip from https://www.7-zip.org/ and ensure it's in your system PATH. "
+                        f"Original error: {py7zr_error}"
+                    )
+                except subprocess.CalledProcessError as e:
+                    raise Exception(
+                        f"7z extraction failed with both py7zr and system 7z command. "
+                        f"py7zr error: {py7zr_error}. "
+                        f"7z command error: {e.stderr}"
+                    )
 
         return extract_dir
 

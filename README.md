@@ -51,6 +51,7 @@ A full-featured graphical user interface for [Nyuu](https://github.com/animetosh
 
 - Python 3.6 or higher
 - pip (Python package installer)
+- **Windows users only**: [7-Zip](https://www.7-zip.org/) (required for extracting Nyuu Windows builds due to BCJ2 compression)
 
 ### Setup
 
@@ -210,9 +211,10 @@ The GUI is compatible with Nyuu v0.4.2 and later. It automatically downloads the
 
 **Solutions**:
 - Ensure you have installed all dependencies: `pip install -r requirements.txt`
-- The py7zr library handles .7z files automatically (no system 7-zip needed)
-- For .tar.xz files, Python's built-in tarfile module is used
+- **For Windows users**: The Windows Nyuu build uses BCJ2 compression which py7zr doesn't support. Install [7-Zip](https://www.7-zip.org/) and the application will automatically use it as a fallback
+- For Linux/macOS .tar.xz files, Python's built-in tarfile module is used (no additional tools needed)
 - Check that you have write permissions in the application directory
+- Verify the downloaded file isn't corrupted by re-downloading
 
 ### Upload Fails Immediately
 
