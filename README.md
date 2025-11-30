@@ -10,7 +10,7 @@ A full-featured graphical user interface for [Nyuu](https://github.com/animetosh
 ### 🚀 Automatic Nyuu Management
 - **One-click download** of Nyuu binaries from GitHub releases
 - **Multi-platform support**: Linux (x64, ARM64), macOS, Windows
-- **Automatic extraction** and setup (downloads 7-Zip automatically on Windows if needed)
+- **Automatic tool downloads** on Windows: 7-Zip and par2cmdline downloaded automatically when needed
 - **Zero manual configuration** - works out of the box
 - **Or use your own** existing Nyuu installation
 
@@ -38,6 +38,12 @@ A full-featured graphical user interface for [Nyuu](https://github.com/animetosh
 - Visual file list management
 - Drag-and-drop support (planned)
 
+### 🔧 File Preparation
+- **File Splitting**: Automatically split large files into smaller chunks
+- **PAR2 Recovery**: Create parity files for data recovery (auto-downloads par2cmdline on Windows!)
+- Configurable split size and redundancy percentage
+- Automatic processing before upload
+
 ### ⚙️ Advanced Features
 - Error handling configuration
 - Quiet mode
@@ -52,7 +58,10 @@ A full-featured graphical user interface for [Nyuu](https://github.com/animetosh
 
 - Python 3.6 or higher
 - pip (Python package installer)
-- **Windows users**: 7-Zip will be downloaded automatically if needed (or you can install it manually from [7-Zip](https://www.7-zip.org/))
+- **Windows users**: Both 7-Zip and par2cmdline will be downloaded automatically if needed!
+- **Linux/macOS users** (optional for PAR2):
+  - Linux: `sudo apt-get install par2` or `sudo yum install par2cmdline`
+  - macOS: `brew install par2`
 
 ### Setup
 
@@ -105,12 +114,18 @@ chmod +x nyuu_gui.py
    - Add files or directories to upload
    - Enable "Include Subdirectories" if needed
 
-5. **Configure NZB Output**:
+5. **(Optional) Configure File Preparation**:
+   - Go to the "File Preparation" tab
+   - Enable file splitting if needed (splits large files into chunks)
+   - Enable PAR2 creation for data recovery (requires par2cmdline)
+   - Files will be automatically processed before upload
+
+6. **Configure NZB Output**:
    - Go to the "NZB Output" tab
    - Set output file path
    - Add metadata if desired
 
-6. **Start Upload**:
+7. **Start Upload**:
    - Click "Start Upload" button
    - Monitor progress in the "Console" tab
 
@@ -155,6 +170,25 @@ The application also auto-saves the Nyuu path to `nyuu_gui_config.json` for conv
 - Enable automatic post checking
 - Configure retry attempts and delays
 - Re-posting for failed articles
+
+### File Preparation Tab
+
+**File Splitting:**
+- Enable/disable automatic file splitting
+- Set split size in MB (e.g., 100MB chunks)
+- Custom output directory for split files
+- Files larger than split size are automatically split before upload
+
+**PAR2 Recovery Files:**
+- Enable/disable PAR2 creation
+- Set redundancy percentage (1-100%, default 10%)
+- Check PAR2 installation status
+- Automatically creates recovery files for all uploaded content
+
+**Benefits:**
+- **Splitting**: Helpful for servers with file size limits, easier downloads
+- **PAR2**: Essential for Usenet - allows recovery of missing/corrupted data
+- **Automatic**: Files are processed before upload with no manual steps
 
 ### NZB Output Tab
 
@@ -289,6 +323,10 @@ This tool is for legitimate Usenet usage only. Users are responsible for ensurin
 
 ## Roadmap
 
+- [x] File splitting
+- [x] PAR2 recovery file creation
+- [x] Automatic PAR2 download (similar to 7-Zip)
+- [x] Automatic 7-Zip download for Windows
 - [ ] Drag-and-drop file support
 - [ ] Upload queue management
 - [ ] Upload presets/profiles

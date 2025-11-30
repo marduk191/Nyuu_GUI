@@ -263,6 +263,262 @@ class NyuuDownloader:
         return self.nyuu_executable
 
 
+class FileProcessor:
+    """Handles file splitting and PAR2 creation"""
+
+    def __init__(self, work_dir="processed_files"):
+        self.work_dir = Path(work_dir)
+        self.work_dir.mkdir(exist_ok=True)
+        self.par2_url = "https://github.com/Parchive/par2cmdline/releases/download/v1.0.0/par2cmdline-1.0.0-win-x64.zip"
+        self.local_par2_dir = self.work_dir / "par2cmdline"
+        self.local_par2_path = self.local_par2_dir / "par2.exe"
+
+    def split_file(self, filepath, chunk_size_mb, output_dir=None, progress_callback=None):
+        """Split a file into chunks of specified size"""
+        filepath = Path(filepath)
+        if output_dir is None:
+            output_dir = self.work_dir / f"{filepath.stem}_split"
+        else:
+            output_dir = Path(output_dir)
+
+        output_dir.mkdir(exist_ok=True)
+
+        chunk_size = chunk_size_mb * 1024 * 1024  # Convert MB to bytes
+        file_size = filepath.stat().st_size
+
+        if file_size <= chunk_size:
+            # File is smaller than chunk size, no need to split
+            if progress_callback:
+                progress_callback("complete", f"File is smaller than {chunk_size_mb}MB, no splitting needed")
+            return [filepath]
+
+        chunks = []
+        part_num = 1
+
+        try:
+            with open(filepath, 'rb') as f:
+                while True:
+                    chunk = f.read(chunk_size)
+                    if not chunk:
+                        break
+
+                    # Create output filename: original.ext.001, original.ext.002, etc.
+                    output_file = output_dir / f"{filepath.name}.{part_num:03d}"
+
+                    with open(output_file, 'wb') as out:
+                        out.write(chunk)
+
+                    chunks.append(output_file)
+
+                    if progress_callback:
+                        percent = (f.tell() / file_size) * 100
+                        progress_callback("splitting", f"Splitting: {percent:.1f}% (Part {part_num})")
+
+                    part_num += 1
+
+            if progress_callback:
+                progress_callback("complete", f"Split into {len(chunks)} parts")
+
+            return chunks
+
+        except Exception as e:
+            raise Exception(f"Failed to split file: {str(e)}")
+
+    def download_par2_standalone(self, progress_callback=None):
+        """Download standalone par2cmdline binary for Windows"""
+        try:
+            if progress_callback:
+                progress_callback("downloading", "Downloading par2cmdline standalone binary...")
+
+            response = requests.get(self.par2_url, stream=True, timeout=30)
+            response.raise_for_status()
+
+            total_size = int(response.headers.get('content-length', 0))
+            downloaded = 0
+
+            # Download to temp file
+            zip_path = self.work_dir / "par2cmdline.zip"
+
+            with open(zip_path, 'wb') as f:
+                for chunk in response.iter_content(chunk_size=8192):
+                    if chunk:
+                        f.write(chunk)
+                        downloaded += len(chunk)
+                        if progress_callback and total_size:
+                            percent = (downloaded / total_size) * 100
+                            progress_callback("downloading", f"Downloading par2cmdline: {percent:.1f}%")
+
+            # Extract ZIP file
+            if progress_callback:
+                progress_callback("extracting", "Extracting par2cmdline...")
+
+            self.local_par2_dir.mkdir(exist_ok=True)
+
+            with zipfile.ZipFile(zip_path, 'r') as zip_ref:
+                zip_ref.extractall(self.local_par2_dir)
+
+            # Clean up zip file
+            zip_path.unlink()
+
+            # Find par2.exe in extracted files
+            for root, dirs, files in os.walk(self.local_par2_dir):
+                for file in files:
+                    if file.lower() == 'par2.exe':
+                        exe_path = Path(root) / file
+                        # Move to expected location if in subdirectory
+                        if exe_path != self.local_par2_path:
+                            shutil.move(str(exe_path), str(self.local_par2_path))
+                        break
+
+            if progress_callback:
+                progress_callback("complete", "par2cmdline downloaded successfully!")
+
+            return self.local_par2_path
+
+        except Exception as e:
+            # Clean up on failure
+            if zip_path.exists():
+                zip_path.unlink()
+            if self.local_par2_dir.exists():
+                shutil.rmtree(self.local_par2_dir)
+            raise Exception(f"Failed to download par2cmdline: {str(e)}")
+
+    def find_par2_executable(self):
+        """Find par2 executable on the system"""
+        # First check if we have a local copy
+        if self.local_par2_path.exists():
+            return str(self.local_par2_path)
+
+        # Check if par2 or par2create is in PATH
+        for cmd in ['par2', 'par2create', 'par2.exe']:
+            try:
+                result = subprocess.run([cmd, '-h'],
+                                      capture_output=True,
+                                      timeout=2)
+                return cmd
+            except (FileNotFoundError, subprocess.TimeoutExpired):
+                continue
+
+        # Check common installation paths on Windows
+        if sys.platform == 'win32':
+            common_paths = [
+                r"C:\Program Files\par2cmdline\par2.exe",
+                r"C:\Program Files (x86)\par2cmdline\par2.exe",
+            ]
+            for path in common_paths:
+                if os.path.exists(path):
+                    return path
+
+        return None
+
+    def create_par2(self, files, redundancy=10, output_dir=None, progress_callback=None):
+        """Create PAR2 recovery files for given files
+
+        Args:
+            files: List of file paths or single file path
+            redundancy: Redundancy percentage (default 10%)
+            output_dir: Output directory for PAR2 files
+            progress_callback: Callback function for progress updates
+        """
+        if isinstance(files, (str, Path)):
+            files = [files]
+
+        files = [Path(f) for f in files]
+
+        if not files:
+            raise ValueError("No files provided for PAR2 creation")
+
+        # Find par2 executable
+        par2_cmd = self.find_par2_executable()
+
+        # If no par2 found, try downloading it automatically (Windows only)
+        if not par2_cmd and sys.platform == 'win32':
+            try:
+                if progress_callback:
+                    progress_callback("downloading", "par2cmdline not found. Downloading standalone version...")
+
+                self.download_par2_standalone(progress_callback)
+                par2_cmd = self.find_par2_executable()
+
+                if progress_callback:
+                    progress_callback("creating", "par2cmdline downloaded. Creating PAR2 files...")
+            except Exception as download_error:
+                raise Exception(
+                    f"Failed to download par2cmdline automatically: {download_error}\n\n"
+                    "Please manually install par2cmdline from:\n"
+                    "https://github.com/Parchive/par2cmdline/releases"
+                )
+
+        if not par2_cmd:
+            raise Exception(
+                "PAR2 command-line tool not found.\n\n"
+                "Please install par2cmdline:\n"
+                "- Linux: sudo apt-get install par2 (or yum install par2cmdline)\n"
+                "- macOS: brew install par2\n"
+                "- Windows: Download from https://github.com/Parchive/par2cmdline/releases"
+            )
+
+        # Determine output directory
+        if output_dir is None:
+            output_dir = files[0].parent
+        else:
+            output_dir = Path(output_dir)
+
+        # Create PAR2 file name based on first file or directory name
+        if len(files) == 1:
+            par2_name = output_dir / f"{files[0].stem}.par2"
+        else:
+            # Use common directory name or generic name
+            par2_name = output_dir / "recovery.par2"
+
+        try:
+            if progress_callback:
+                progress_callback("creating", "Creating PAR2 recovery files...")
+
+            # Build par2 command
+            # Format: par2 create -r<redundancy> output.par2 file1 file2 ...
+            cmd = [
+                par2_cmd,
+                'create',
+                f'-r{redundancy}',
+                str(par2_name)
+            ] + [str(f) for f in files]
+
+            # Run par2 command
+            process = subprocess.Popen(
+                cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                universal_newlines=True,
+                cwd=str(output_dir)
+            )
+
+            # Monitor output
+            for line in process.stdout:
+                if progress_callback:
+                    # Try to extract progress from par2 output
+                    if '%' in line:
+                        progress_callback("creating", f"Creating PAR2: {line.strip()}")
+                    else:
+                        progress_callback("creating", "Creating PAR2 recovery files...")
+
+            process.wait()
+
+            if process.returncode == 0:
+                # Find created PAR2 files
+                par2_files = list(output_dir.glob(f"{par2_name.stem}*.par2"))
+
+                if progress_callback:
+                    progress_callback("complete", f"Created {len(par2_files)} PAR2 file(s)")
+
+                return par2_files
+            else:
+                raise Exception(f"PAR2 creation failed with exit code {process.returncode}")
+
+        except Exception as e:
+            raise Exception(f"Failed to create PAR2 files: {str(e)}")
+
+
 class NyuuGUI:
     """Main GUI application for Nyuu"""
 
@@ -272,6 +528,7 @@ class NyuuGUI:
         self.root.geometry("900x800")
 
         self.downloader = NyuuDownloader()
+        self.file_processor = FileProcessor()
         self.nyuu_process = None
         self.config = {}
 
@@ -290,6 +547,7 @@ class NyuuGUI:
         self.setup_posting_tab()
         self.setup_nzb_tab()
         self.setup_files_tab()
+        self.setup_file_prep_tab()
         self.setup_advanced_tab()
         self.setup_console_tab()
 
@@ -549,6 +807,89 @@ This GUI provides an easy interface to all Nyuu features."""
         ttk.Button(files_frame, text="Remove Selected",
                   command=self.remove_selected_files).pack(pady=5)
 
+    def setup_file_prep_tab(self):
+        """Setup file preparation tab (splitting and PAR2)"""
+        frame = ttk.Frame(self.notebook)
+        self.notebook.add(frame, text="File Preparation")
+
+        # File Splitting section
+        split_frame = ttk.LabelFrame(frame, text="File Splitting", padding=10)
+        split_frame.pack(fill=tk.X, padx=10, pady=5)
+
+        self.enable_split_var = tk.BooleanVar(value=False)
+        ttk.Checkbutton(split_frame, text="Enable File Splitting",
+                       variable=self.enable_split_var,
+                       command=self.toggle_split_options).grid(row=0, column=0, columnspan=3, sticky=tk.W, pady=5)
+
+        ttk.Label(split_frame, text="Split Size (MB):").grid(row=1, column=0, sticky=tk.W, pady=5, padx=(20, 5))
+
+        self.split_size_var = tk.StringVar(value="100")
+        self.split_size_entry = ttk.Spinbox(split_frame, textvariable=self.split_size_var,
+                                           from_=1, to=10000, width=10, state=tk.DISABLED)
+        self.split_size_entry.grid(row=1, column=1, sticky=tk.W, pady=5)
+
+        ttk.Label(split_frame, text="(Files larger than this will be split)").grid(row=1, column=2, sticky=tk.W, pady=5, padx=5)
+
+        ttk.Label(split_frame, text="Output Directory:").grid(row=2, column=0, sticky=tk.W, pady=5, padx=(20, 5))
+
+        self.split_output_var = tk.StringVar()
+        self.split_output_entry = ttk.Entry(split_frame, textvariable=self.split_output_var,
+                                           width=40, state=tk.DISABLED)
+        self.split_output_entry.grid(row=2, column=1, sticky=tk.W, pady=5)
+
+        self.split_browse_btn = ttk.Button(split_frame, text="Browse",
+                                          command=self.browse_split_output, state=tk.DISABLED)
+        self.split_browse_btn.grid(row=2, column=2, padx=5)
+
+        ttk.Label(split_frame, text="(Leave empty to use 'processed_files' directory)").grid(row=3, column=1, columnspan=2, sticky=tk.W, pady=2)
+
+        # PAR2 section
+        par2_frame = ttk.LabelFrame(frame, text="PAR2 Recovery Files", padding=10)
+        par2_frame.pack(fill=tk.X, padx=10, pady=5)
+
+        self.enable_par2_var = tk.BooleanVar(value=False)
+        ttk.Checkbutton(par2_frame, text="Create PAR2 Recovery Files",
+                       variable=self.enable_par2_var,
+                       command=self.toggle_par2_options).grid(row=0, column=0, columnspan=3, sticky=tk.W, pady=5)
+
+        ttk.Label(par2_frame, text="Redundancy %:").grid(row=1, column=0, sticky=tk.W, pady=5, padx=(20, 5))
+
+        self.par2_redundancy_var = tk.StringVar(value="10")
+        self.par2_redundancy_entry = ttk.Spinbox(par2_frame, textvariable=self.par2_redundancy_var,
+                                                from_=1, to=100, width=10, state=tk.DISABLED)
+        self.par2_redundancy_entry.grid(row=1, column=1, sticky=tk.W, pady=5)
+
+        ttk.Label(par2_frame, text="(10% = 10% recovery data)").grid(row=1, column=2, sticky=tk.W, pady=5, padx=5)
+
+        # Status
+        self.par2_status = ttk.Label(par2_frame, text="PAR2 tool not checked", foreground="gray")
+        self.par2_status.grid(row=2, column=0, columnspan=3, sticky=tk.W, pady=5, padx=(20, 5))
+
+        ttk.Button(par2_frame, text="Check PAR2 Installation",
+                  command=self.check_par2).grid(row=3, column=0, columnspan=3, pady=5, padx=(20, 5))
+
+        # Info section
+        info_frame = ttk.LabelFrame(frame, text="About File Preparation", padding=10)
+        info_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
+
+        info_text = """File Splitting:
+Splits large files into smaller chunks for easier posting and downloading.
+Useful when your Usenet provider has file size limits.
+
+PAR2 Recovery Files:
+Creates parity files that allow recovery of missing or corrupted data.
+Essential for Usenet posts to ensure data integrity.
+Requires par2cmdline to be installed on your system.
+
+Workflow:
+1. Add files in the Files tab
+2. Enable splitting/PAR2 here as needed
+3. Files will be processed before upload when you click "Start Upload"
+"""
+
+        info_label = tk.Label(info_frame, text=info_text, justify=tk.LEFT, anchor=tk.NW)
+        info_label.pack(fill=tk.BOTH, expand=True)
+
     def setup_advanced_tab(self):
         """Setup advanced options tab"""
         frame = ttk.Frame(self.notebook)
@@ -702,6 +1043,46 @@ This GUI provides an easy interface to all Nyuu features."""
         for index in reversed(selection):
             self.files_listbox.delete(index)
 
+    def toggle_split_options(self):
+        """Enable/disable split options based on checkbox"""
+        if self.enable_split_var.get():
+            self.split_size_entry.config(state=tk.NORMAL)
+            self.split_output_entry.config(state=tk.NORMAL)
+            self.split_browse_btn.config(state=tk.NORMAL)
+        else:
+            self.split_size_entry.config(state=tk.DISABLED)
+            self.split_output_entry.config(state=tk.DISABLED)
+            self.split_browse_btn.config(state=tk.DISABLED)
+
+    def toggle_par2_options(self):
+        """Enable/disable PAR2 options based on checkbox"""
+        if self.enable_par2_var.get():
+            self.par2_redundancy_entry.config(state=tk.NORMAL)
+        else:
+            self.par2_redundancy_entry.config(state=tk.DISABLED)
+
+    def browse_split_output(self):
+        """Browse for split files output directory"""
+        dirname = filedialog.askdirectory(title="Select output directory for split files")
+        if dirname:
+            self.split_output_var.set(dirname)
+
+    def check_par2(self):
+        """Check if PAR2 is installed"""
+        par2_cmd = self.file_processor.find_par2_executable()
+        if par2_cmd:
+            self.par2_status.config(text=f"✓ PAR2 found: {par2_cmd}", foreground="green")
+            self.log_message(f"PAR2 found: {par2_cmd}")
+        else:
+            self.par2_status.config(text="✗ PAR2 not found", foreground="red")
+            messagebox.showwarning("PAR2 Not Found",
+                "PAR2 command-line tool not found.\n\n"
+                "Please install par2cmdline:\n"
+                "- Windows: Download from https://github.com/Parchive/par2cmdline/releases\n"
+                "- Linux: sudo apt-get install par2 (or yum install par2cmdline)\n"
+                "- macOS: brew install par2"
+            )
+
     def build_command(self):
         """Build the Nyuu command from GUI settings"""
         nyuu_path = self.nyuu_path_var.get()
@@ -814,10 +1195,93 @@ This GUI provides an easy interface to all Nyuu features."""
         except ValueError as e:
             messagebox.showerror("Error", str(e))
 
+    def process_files_before_upload(self):
+        """Process files (split and create PAR2) before upload"""
+        files = list(self.files_listbox.get(0, tk.END))
+        if not files:
+            return files
+
+        processed_files = []
+
+        try:
+            # File splitting
+            if self.enable_split_var.get():
+                self.log_message("="*80)
+                self.log_message("Processing files: Splitting enabled")
+                split_size = int(self.split_size_var.get())
+                split_output = self.split_output_var.get() or None
+
+                for filepath in files:
+                    if os.path.isfile(filepath):
+                        self.log_message(f"Checking file: {filepath}")
+
+                        def progress_callback(status, message):
+                            self.log_message(f"  {message}")
+
+                        chunks = self.file_processor.split_file(
+                            filepath, split_size, split_output, progress_callback
+                        )
+                        processed_files.extend(chunks)
+                    else:
+                        # Directory - add as is
+                        processed_files.append(filepath)
+            else:
+                processed_files = files
+
+            # PAR2 creation
+            if self.enable_par2_var.get():
+                self.log_message("="*80)
+                self.log_message("Creating PAR2 recovery files...")
+                redundancy = int(self.par2_redundancy_var.get())
+
+                def progress_callback(status, message):
+                    self.log_message(f"  {message}")
+
+                # Create PAR2 for all files
+                par2_files = self.file_processor.create_par2(
+                    processed_files, redundancy, progress_callback=progress_callback
+                )
+
+                # Add PAR2 files to upload list
+                processed_files.extend(par2_files)
+                self.log_message(f"Added {len(par2_files)} PAR2 files to upload")
+
+            return processed_files
+
+        except Exception as e:
+            raise Exception(f"File processing failed: {str(e)}")
+
     def start_upload(self):
         """Start the upload process"""
         try:
+            # First, process files if needed
+            processed_files = None
+            if self.enable_split_var.get() or self.enable_par2_var.get():
+                self.log_message("="*80)
+                self.log_message("Pre-processing files...")
+                self.status_label.config(text="Processing files...", foreground="blue")
+
+                try:
+                    processed_files = self.process_files_before_upload()
+                except Exception as e:
+                    messagebox.showerror("Processing Error", str(e))
+                    self.log_message(f"✗ Processing failed: {str(e)}")
+                    return
+
+            # Build command with processed files
             cmd = self.build_command()
+
+            # Replace file arguments with processed files if any
+            if processed_files:
+                # Find where files start in command (after all the options)
+                original_files = list(self.files_listbox.get(0, tk.END))
+                for orig_file in original_files:
+                    if orig_file in cmd:
+                        idx = cmd.index(orig_file)
+                        cmd.pop(idx)
+
+                # Add processed files
+                cmd.extend([str(f) for f in processed_files])
 
             self.log_message("="*80)
             self.log_message("Starting upload...")
