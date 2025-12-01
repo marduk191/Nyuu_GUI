@@ -477,30 +477,45 @@ class FileProcessor:
 
             # Build par2 command
             # Format: par2 create -r<redundancy> output.par2 file1 file2 ...
+            # Use absolute paths for all files
             cmd = [
                 par2_cmd,
                 'create',
                 f'-r{redundancy}',
-                str(par2_name)
-            ] + [str(f) for f in files]
+                str(par2_name.absolute())
+            ] + [str(Path(f).absolute()) for f in files]
 
-            # Run par2 command
+            # Log command for debugging (first few parts only to avoid clutter)
+            if progress_callback:
+                cmd_preview = ' '.join(cmd[:5]) + f' ... ({len(files)} file(s))'
+                progress_callback("creating", f"Running: {cmd_preview}")
+
+            # Run par2 command (don't change working directory, use absolute paths)
             process = subprocess.Popen(
                 cmd,
                 stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
-                universal_newlines=True,
-                cwd=str(output_dir)
+                stderr=subprocess.PIPE,
+                universal_newlines=True
             )
+
+            # Collect output
+            stdout_lines = []
+            stderr_lines = []
 
             # Monitor output
             for line in process.stdout:
+                stdout_lines.append(line)
                 if progress_callback:
                     # Try to extract progress from par2 output
                     if '%' in line:
                         progress_callback("creating", f"Creating PAR2: {line.strip()}")
-                    else:
-                        progress_callback("creating", "Creating PAR2 recovery files...")
+                    elif line.strip():
+                        progress_callback("creating", line.strip())
+
+            # Get any stderr
+            stderr_output = process.stderr.read()
+            if stderr_output:
+                stderr_lines.append(stderr_output)
 
             process.wait()
 
@@ -513,9 +528,27 @@ class FileProcessor:
 
                 return par2_files
             else:
-                raise Exception(f"PAR2 creation failed with exit code {process.returncode}")
+                # Collect error information
+                error_msg = f"PAR2 creation failed with exit code {process.returncode}"
 
+                if stderr_output:
+                    error_msg += f"\n\nError output:\n{stderr_output}"
+
+                if stdout_lines:
+                    stdout_text = ''.join(stdout_lines)
+                    if stdout_text.strip():
+                        error_msg += f"\n\nCommand output:\n{stdout_text}"
+
+                # Log the command for debugging
+                error_msg += f"\n\nCommand: {' '.join(cmd[:5])}... ({len(files)} files)"
+
+                raise Exception(error_msg)
+
+        except subprocess.SubprocessError as e:
+            raise Exception(f"Failed to run PAR2 command: {str(e)}")
         except Exception as e:
+            if "PAR2 creation failed" in str(e):
+                raise  # Re-raise with full error details
             raise Exception(f"Failed to create PAR2 files: {str(e)}")
 
 
