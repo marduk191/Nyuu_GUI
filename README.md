@@ -2,7 +2,6 @@
 
 A full-featured graphical user interface for [Nyuu](https://github.com/animetosho/Nyuu), the high-performance Usenet binary posting tool. Built with Python and tkinter, this GUI makes posting to Usenet simple and accessible.
 
-![Python Version](https://img.shields.io/badge/python-3.6+-blue.svg)
 ![License](https://img.shields.io/badge/license-MIT-green.svg)
 <img width="1002" height="882" alt="image" src="https://github.com/user-attachments/assets/67de12c7-70c7-4ccc-9b75-42761ef01f53" />
 
